@@ -166,4 +166,31 @@ const orderList = async (req, res, next) => {
   }
 };
 
-module.exports = { createOrder, orderList };
+const orderStatus = async (req, res, next) => {
+  try {
+    const queryString = req.query;
+    console.log(queryString);
+
+    const existOrder = await queryDB(
+      `SELECT status FROM orders WHERE id = ? AND deleted_at IS NULL`,
+      queryString.id
+    );
+    console.log(existOrder);
+
+    if (existOrder.length < 1) {
+      throw {
+        code: 404,
+        message: "order not found",
+      };
+    }
+
+    return res.status(200).json({
+      code: 200,
+      message: existOrder[0],
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { createOrder, orderList, orderStatus };
