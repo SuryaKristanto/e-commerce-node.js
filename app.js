@@ -6,6 +6,7 @@ const app = express();
 const authenticationRouter = require("./routes/authentication.router");
 const productRouter = require("./routes/product.router");
 const orderRouter = require("./routes/order.router");
+const paymentRouter = require("./routes/payment.router");
 
 // logger
 const logger = require("./middlewares/errorhandler.middleware");
@@ -18,6 +19,7 @@ app.get("/", (req, res) => res.send("Hello World!"));
 app.use("", authenticationRouter);
 app.use("/product", productRouter);
 app.use("/order", orderRouter);
+app.use("/payment", paymentRouter);
 
 // error handler for unknown endpoint
 app.use("*", (req, res, next) => {
