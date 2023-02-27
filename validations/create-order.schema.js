@@ -7,6 +7,7 @@ const createOrderSchema = Joi.object({
       qty: Joi.number().required(),
     })
   ),
+  payment_method: Joi.string().required(),
 });
 
 module.exports = createOrderSchema;
