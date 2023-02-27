@@ -122,7 +122,7 @@ const orderList = async (req, res, next) => {
     // console.log(userId);
 
     const orders = await queryDB(
-      `SELECT orders.order_no, orders.status, orders.total_price, order_products.product_code AS "product_code", order_products.qty_order AS "qty_order", products.name AS "name", products.price AS "price" FROM orders LEFT JOIN order_products ON orders.id = order_products.order_id LEFT JOIN products ON order_products.product_code = products.code AND (products.deleted_at IS NULL) WHERE orders.deleted_at IS NULL AND orders.user_id = ?`,
+      `SELECT orders.order_no, orders.status, orders.total_price, order_products.product_code AS "product_code", order_products.qty_order AS "qty_order", products.name AS "name", products.price AS "price" FROM orders LEFT JOIN order_products ON orders.id = order_products.order_id LEFT JOIN products ON order_products.product_code = products.code AND (products.deleted_at IS NULL) WHERE orders.deleted_at IS NULL AND orders.user_id = ? AND status <> 'FINISHED'`,
       userId[0].id
     );
     console.log(orders);
@@ -193,4 +193,57 @@ const orderStatus = async (req, res, next) => {
   }
 };
 
-module.exports = { createOrder, orderList, orderStatus };
+const orderHistory = async (req, res, next) => {
+  try {
+    const userId = await queryDB(
+      `SELECT id FROM users WHERE id = ? AND deleted_at IS NULL`,
+      [req.user_id]
+    );
+    // console.log(userId);
+
+    const orders = await queryDB(
+      `SELECT orders.order_no, orders.status, orders.total_price, order_products.product_code AS "product_code", order_products.qty_order AS "qty_order", products.name AS "name", products.price AS "price" FROM orders LEFT JOIN order_products ON orders.id = order_products.order_id LEFT JOIN products ON order_products.product_code = products.code AND (products.deleted_at IS NULL) WHERE orders.deleted_at IS NULL AND orders.user_id = ? AND status = 'FINISHED'`,
+      userId[0].id
+    );
+    console.log(orders);
+
+    const order_products = [];
+    for (let i = 0; i < orders.length; i++) {
+      const existingOrderIndex = order_products.findIndex(
+        (order) => order.order_no === orders[i].order_no
+      );
+
+      if (existingOrderIndex > -1) {
+        order_products[existingOrderIndex].products.push({
+          product_code: orders[i].product_code,
+          qty_order: orders[i].qty_order,
+          name: orders[i].name,
+          price: orders[i].price,
+        });
+      } else {
+        order_products.push({
+          order_no: orders[i].order_no,
+          status: orders[i].status,
+          total_price: orders[i].total_price,
+          products: [
+            {
+              product_code: orders[i].product_code,
+              qty_order: orders[i].qty_order,
+              name: orders[i].name,
+              price: orders[i].price,
+            },
+          ],
+        });
+      }
+    }
+    // console.log(order_products);
+    res.status(200).json({
+      message: "Order List",
+      data: order_products,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { createOrder, orderList, orderStatus, orderHistory };
