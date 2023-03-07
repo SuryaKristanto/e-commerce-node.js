@@ -15,8 +15,8 @@ async function queryDB(query, param) {
 
 const productList = async (req, res, next) => {
   try {
-    const page = parseInt(req.query.page || 1);
-    const limit = 5;
+    const page = req.body.page;
+    const limit = req.body.limit;
 
     // Calculate the offset
     const offset = (page - 1) * limit;

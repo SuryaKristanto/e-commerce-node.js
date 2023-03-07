@@ -7,6 +7,7 @@ const authenticationRouter = require("./routes/authentication.router");
 const productRouter = require("./routes/product.router");
 const orderRouter = require("./routes/order.router");
 const paymentRouter = require("./routes/payment.router");
+const wishlistRouter = require("./routes/wishlist.router");
 
 // logger
 const logger = require("./middlewares/errorhandler.middleware");
@@ -20,6 +21,7 @@ app.use("", authenticationRouter);
 app.use("/product", productRouter);
 app.use("/order", orderRouter);
 app.use("/payment", paymentRouter);
+app.use("/wishlist", wishlistRouter);
 
 // error handler for unknown endpoint
 app.use("*", (req, res, next) => {
