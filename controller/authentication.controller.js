@@ -32,7 +32,7 @@ const register = async (req, res, next) => {
     );
 
     var isPhoneExist = await queryDB(
-      `SELECT email FROM  users WHERE email = "${bodies.phone}"`
+      `SELECT phone FROM  users WHERE phone = "${bodies.phone}"`
     );
 
     // cek apakah role_id nya ada atau tidak
