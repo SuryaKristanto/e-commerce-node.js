@@ -18,17 +18,11 @@ const orderPayment = async (req, res, next) => {
     const queryString = req.query;
     const bodies = req.body;
 
-    const order = await queryDB(
-      `SELECT total_price FROM orders WHERE user_id = ? AND order_no = ?`,
-      [queryString.user_id, queryString.order_no]
-    );
+    const order = await queryDB(`SELECT total_price FROM orders WHERE user_id = ? AND order_no = ?`, [queryString.user_id, queryString.order_no]);
     console.log(order);
 
     if (order[0].total_price == bodies.payment_amount) {
-      const payment = await queryDB(
-        `UPDATE orders SET status = 'PENDING' WHERE user_id = ? AND order_no = ?`,
-        [queryString.user_id, queryString.order_no]
-      );
+      const payment = await queryDB(`UPDATE orders SET status = 'PROCESSING' WHERE user_id = ? AND order_no = ?`, [queryString.user_id, queryString.order_no]);
       console.log(payment);
 
       return res.status(200).json({
