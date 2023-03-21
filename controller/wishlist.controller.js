@@ -17,10 +17,7 @@ const addWishlist = async (req, res, next) => {
   try {
     const bodies = req.body;
 
-    const add = await queryDB(
-      `INSERT INTO wishlist (id, user_id, product_code, created_at) VALUES (DEFAULT,?,?,DEFAULT)`,
-      [req.user_id, bodies.product_code]
-    );
+    const add = await queryDB(`INSERT INTO wishlist (id, user_id, product_code, created_at) VALUES (DEFAULT,?,?,DEFAULT)`, [req.user_id, bodies.product_code]);
     console.log(add);
 
     res.status(200).json({
@@ -33,10 +30,7 @@ const addWishlist = async (req, res, next) => {
 
 const getWishlist = async (req, res, next) => {
   try {
-    const product = await queryDB(
-      `SELECT product_code FROM wishlist WHERE user_id = ? ORDER BY created_at DESC`,
-      req.user_id
-    );
+    const product = await queryDB(`SELECT product_code FROM wishlist WHERE user_id = ? ORDER BY created_at DESC`, req.user_id);
     // console.log(product);
 
     let productCode = [];
@@ -49,8 +43,8 @@ const getWishlist = async (req, res, next) => {
     // console.log(placeholders);
 
     const list = await queryDB(
-      `SELECT products.name, products.price FROM wishlist LEFT JOIN products ON wishlist.product_code = products.code WHERE code IN (${placeholders}) AND deleted_at IS NULL ORDER BY wishlist.created_at DESC`,
-      productCode
+      `SELECT products.name, products.price FROM wishlist LEFT JOIN products ON wishlist.product_code = products.code WHERE code IN (${placeholders}) AND wishlist.user_id = ? AND deleted_at IS NULL ORDER BY wishlist.created_at DESC`,
+      [productCode, req.user_id]
     );
     console.log(list);
 
@@ -67,10 +61,7 @@ const removeWishlist = async (req, res, next) => {
   try {
     const bodies = req.body;
 
-    const remove = await queryDB(
-      `DELETE FROM wishlist WHERE user_id = ? AND product_code = ?`,
-      [req.user_id, bodies.product_code]
-    );
+    const remove = await queryDB(`DELETE FROM wishlist WHERE user_id = ? AND product_code = ?`, [req.user_id, bodies.product_code]);
     console.log(remove);
 
     res.status(200).json({
