@@ -23,17 +23,11 @@ const register = async (req, res, next) => {
   try {
     const bodies = req.body;
 
-    var isRoleExist = await queryDB(
-      `SELECT * FROM roles WHERE id = ${bodies.role_id}`
-    );
+    var isRoleExist = await queryDB(`SELECT * FROM roles WHERE id = ${bodies.role_id}`);
 
-    var isUserExist = await queryDB(
-      `SELECT email FROM  users WHERE email = "${bodies.email}"`
-    );
+    var isUserExist = await queryDB(`SELECT email FROM  users WHERE email = "${bodies.email}"`);
 
-    var isPhoneExist = await queryDB(
-      `SELECT phone FROM  users WHERE phone = "${bodies.phone}"`
-    );
+    var isPhoneExist = await queryDB(`SELECT phone FROM  users WHERE phone = "${bodies.phone}"`);
 
     // cek apakah role_id nya ada atau tidak
     if (isRoleExist.length < 1) {
@@ -65,22 +59,12 @@ const register = async (req, res, next) => {
 
     // hash pw karna secret (encrypt)
     // Hmac
-    const encrypted = crypto
-      .createHmac("sha256", process.env.SECRET)
-      .update(bodies.password)
-      .digest("hex");
+    const encrypted = crypto.createHmac("sha256", process.env.SECRET).update(bodies.password).digest("hex");
     // console.log(encrypted);
 
     var user = await queryDB(
       `INSERT INTO users (id,role_id,email,password,name,address,phone,updated_at,created_at) VALUES (DEFAULT,?,?,?,?,?,?,DEFAULT,DEFAULT)`,
-      [
-        bodies.role_id,
-        bodies.email,
-        encrypted,
-        bodies.name,
-        bodies.address,
-        bodies.phone,
-      ]
+      [bodies.role_id, bodies.email, encrypted, bodies.name, bodies.address, bodies.phone]
     );
     console.log(user);
 
@@ -102,9 +86,7 @@ const login = async (req, res, next) => {
     const { email, password } = req.body;
 
     // cek email tersebut ada ngga di db
-    var user = await queryDB(
-      `SELECT id, role_id, email, password FROM users WHERE email = "${email}"`
-    );
+    var user = await queryDB(`SELECT id, role_id, email, password FROM users WHERE email = "${email}"`);
     console.log(user);
 
     // kalo gaada email, throw error user not found
@@ -116,10 +98,7 @@ const login = async (req, res, next) => {
     }
 
     // kalo ada kita compare pw
-    const hasedPassword = await crypto
-      .createHmac("sha256", process.env.SECRET)
-      .update(password)
-      .digest("hex");
+    const hasedPassword = crypto.createHmac("sha256", process.env.SECRET).update(password).digest("hex");
     const isValidPassword = hasedPassword === user[0].password;
 
     // kalo pwnya beda, throw invalid pw
@@ -142,13 +121,9 @@ const login = async (req, res, next) => {
     }
 
     // kalo pwnya sama, generate token
-    const token = jwt.sign(
-      { user_id: user[0].id, role: roleName },
-      process.env.JWT_SECRET,
-      {
-        expiresIn: process.env.JWT_EXPIRES_IN,
-      }
-    );
+    const token = jwt.sign({ user_id: user[0].id, role: roleName }, process.env.JWT_SECRET, {
+      expiresIn: process.env.JWT_EXPIRES_IN,
+    });
 
     // kirim token di respon
     return res.status(200).json({
@@ -166,9 +141,7 @@ const forgotPassword = async (req, res, next) => {
     const email = req.body.email;
     const subject = "Reset Your Password";
 
-    const isUserExist = await queryDB(
-      `SELECT email FROM  users WHERE email = "${email}"`
-    );
+    const isUserExist = await queryDB(`SELECT email FROM  users WHERE email = "${email}"`);
 
     // cek apakah ada user yang memiliki email yang sudah di register
     // if user doesn't exist, send error message
@@ -186,10 +159,7 @@ const forgotPassword = async (req, res, next) => {
 
     const tokenExpired = moment().add(1, "hour").format("YYYY-MM-DD HH:mm:ss");
 
-    var user = await queryDB(
-      `UPDATE users SET reset_token = ?, token_expired_at = ? WHERE email = ?`,
-      [token, tokenExpired, email]
-    );
+    var user = await queryDB(`UPDATE users SET reset_token = ?, token_expired_at = ? WHERE email = ?`, [token, tokenExpired, email]);
     // console.log(user);
 
     let mailOptions = {
@@ -219,36 +189,23 @@ const resetPassword = async (req, res, next) => {
     token = req.query.token;
     bodies = req.body;
 
-    const encryptedOld = crypto
-      .createHmac("sha256", process.env.SECRET)
-      .update(bodies.old_password)
-      .digest("hex");
+    const encryptedOld = crypto.createHmac("sha256", process.env.SECRET).update(bodies.old_password).digest("hex");
     // console.log(encrypted);
 
-    const encryptedNew = crypto
-      .createHmac("sha256", process.env.SECRET)
-      .update(bodies.new_password)
-      .digest("hex");
+    const encryptedNew = crypto.createHmac("sha256", process.env.SECRET).update(bodies.new_password).digest("hex");
     // console.log(encrypted);
 
-    const reset = await queryDB(
-      `SELECT password, reset_token, token_expired_at FROM users WHERE email = "${email}"`
-    );
+    const reset = await queryDB(`SELECT password, reset_token, token_expired_at FROM users WHERE email = "${email}"`);
     // console.log(reset);
 
-    const formatted = moment(reset[0].token_expired_at).format(
-      "YYYY-MM-DD HH:mm:ss"
-    );
+    const formatted = moment(reset[0].token_expired_at).format("YYYY-MM-DD HH:mm:ss");
     // console.log(formatted);
 
     if (token == reset[0].reset_token) {
       if (formatted > moment().format("YYYY-MM-DD HH:mm:ss")) {
         if (reset[0].password == encryptedOld) {
           if (bodies.confirm_new_password == bodies.new_password) {
-            const newPassword = await queryDB(
-              `UPDATE users SET password = ? WHERE email = ?`,
-              [encryptedNew, email]
-            );
+            const newPassword = await queryDB(`UPDATE users SET password = ? WHERE email = ?`, [encryptedNew, email]);
             console.log(newPassword);
           } else {
             throw {
