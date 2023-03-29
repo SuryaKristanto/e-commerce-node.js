@@ -1,4 +1,5 @@
 const connection = require("../db");
+const uuid = require("uuid");
 
 async function queryDB(query, param) {
   return new Promise((resolve) => {
@@ -29,10 +30,7 @@ const createOrder = async (req, res, next) => {
     const placeholders = productCode.map(() => "?").join(", ");
     // console.log(placeholders);
 
-    const existProducts = await queryDB(
-      `SELECT * FROM products WHERE code IN (${placeholders}) AND deleted_at IS NULL`,
-      productCode
-    );
+    const existProducts = await queryDB(`SELECT * FROM products WHERE code IN (${placeholders}) AND deleted_at IS NULL`, productCode);
     console.log(existProducts);
 
     if (existProducts.length !== products.length) {
@@ -45,7 +43,7 @@ const createOrder = async (req, res, next) => {
     try {
       await connection.beginTransaction();
 
-      const order_no = Math.floor(Math.random() * 100 + 1);
+      const order_no = uuid.v4();
 
       const order = await queryDB(
         `INSERT INTO orders (id, user_id, order_no, status, payment_method, updated_at, created_at) VALUES (DEFAULT,?,?,DEFAULT,?,DEFAULT,DEFAULT)`,
@@ -56,18 +54,13 @@ const createOrder = async (req, res, next) => {
       const totalPrice = [];
       await Promise.all(
         existProducts.map(async (product) => {
-          const selectedPayload = products.find(
-            (val) => val.code === product.code
-          );
+          const selectedPayload = products.find((val) => val.code === product.code);
           console.log(selectedPayload);
 
           deductQty = product.qty - selectedPayload.qty;
           console.log(deductQty);
           // deduct product qty
-          const update = await queryDB(
-            `UPDATE products SET qty = ? WHERE qty = ?`,
-            [deductQty, product.qty]
-          );
+          const update = await queryDB(`UPDATE products SET qty = ? WHERE qty = ?`, [deductQty, product.qty]);
           console.log(update);
 
           // create order_products
@@ -90,10 +83,7 @@ const createOrder = async (req, res, next) => {
       }
       console.log(sum);
 
-      const updateTotalPrice = await queryDB(
-        `UPDATE orders SET total_price = ? WHERE order_no = ?`,
-        [sum, order_no]
-      );
+      const updateTotalPrice = await queryDB(`UPDATE orders SET total_price = ? WHERE order_no = ?`, [sum, order_no]);
       console.log(updateTotalPrice);
 
       await connection.commit();
@@ -115,10 +105,7 @@ const createOrder = async (req, res, next) => {
 
 const orderList = async (req, res, next) => {
   try {
-    const userId = await queryDB(
-      `SELECT id FROM users WHERE id = ? AND deleted_at IS NULL`,
-      [req.user_id]
-    );
+    const userId = await queryDB(`SELECT id FROM users WHERE id = ? AND deleted_at IS NULL`, [req.user_id]);
     // console.log(userId);
 
     const orders = await queryDB(
@@ -129,9 +116,7 @@ const orderList = async (req, res, next) => {
 
     const order_products = [];
     for (let i = 0; i < orders.length; i++) {
-      const existingOrderIndex = order_products.findIndex(
-        (order) => order.order_no === orders[i].order_no
-      );
+      const existingOrderIndex = order_products.findIndex((order) => order.order_no === orders[i].order_no);
 
       if (existingOrderIndex > -1) {
         order_products[existingOrderIndex].products.push({
@@ -171,10 +156,7 @@ const orderStatus = async (req, res, next) => {
     const queryString = req.query;
     console.log(queryString);
 
-    const existOrder = await queryDB(
-      `SELECT status FROM orders WHERE id = ? AND deleted_at IS NULL`,
-      queryString.id
-    );
+    const existOrder = await queryDB(`SELECT status FROM orders WHERE id = ? AND deleted_at IS NULL`, queryString.id);
     console.log(existOrder);
 
     if (existOrder.length < 1) {
@@ -195,10 +177,7 @@ const orderStatus = async (req, res, next) => {
 
 const orderHistory = async (req, res, next) => {
   try {
-    const userId = await queryDB(
-      `SELECT id FROM users WHERE id = ? AND deleted_at IS NULL`,
-      [req.user_id]
-    );
+    const userId = await queryDB(`SELECT id FROM users WHERE id = ? AND deleted_at IS NULL`, [req.user_id]);
     // console.log(userId);
 
     const orders = await queryDB(
@@ -209,9 +188,7 @@ const orderHistory = async (req, res, next) => {
 
     const order_products = [];
     for (let i = 0; i < orders.length; i++) {
-      const existingOrderIndex = order_products.findIndex(
-        (order) => order.order_no === orders[i].order_no
-      );
+      const existingOrderIndex = order_products.findIndex((order) => order.order_no === orders[i].order_no);
 
       if (existingOrderIndex > -1) {
         order_products[existingOrderIndex].products.push({
