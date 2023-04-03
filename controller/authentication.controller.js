@@ -5,6 +5,9 @@ const crypto = require("crypto");
 const connection = require("../db");
 const transporter = require("../utils/nodemailer");
 const moment = require("moment");
+const Roles = require("../db/schemas/role.schema");
+const Users = require("../db/schemas/user.schema");
+const { default: mongoose } = require("mongoose");
 
 async function queryDB(query, param) {
   return new Promise((resolve) => {
@@ -23,57 +26,56 @@ const register = async (req, res, next) => {
   try {
     const bodies = req.body;
 
-    var isRoleExist = await queryDB(`SELECT * FROM roles WHERE id = ${bodies.role_id}`);
+    const role = await Roles.findById(bodies.role_id);
 
-    var isUserExist = await queryDB(`SELECT email FROM  users WHERE email = "${bodies.email}"`);
+    const email = await Users.findOne({ email: bodies.email });
 
-    var isPhoneExist = await queryDB(`SELECT phone FROM  users WHERE phone = "${bodies.phone}"`);
+    const phone = await Users.findOne({ phone: bodies.phone });
 
-    // cek apakah role_id nya ada atau tidak
-    if (isRoleExist.length < 1) {
+    // check if role_id exist
+    if (!role) {
       throw {
         code: 404,
         message: "role not found",
       };
     }
-    // console.log(isRoleExist.length);
+    // console.log(role);
 
-    // cek apakah ada user yang memiliki email yang sudah di register
-    // if user exist, send error message
-    if (isUserExist.length > 0) {
+    // check if email already exist
+    if (email) {
       throw {
         code: 400,
         message: "email already exist",
       };
     }
-    // console.log(isUserExist.length);
+    // console.log(email);
 
-    // cek apakah ada user yang memiliki phone yang sudah di register
-    // if user exist, send error message
-    if (isPhoneExist.length > 0) {
+    // check if phone already exist
+    if (phone) {
       throw {
         code: 400,
         message: "phone already exist",
       };
     }
+    // console.log(phone);
 
-    // hash pw karna secret (encrypt)
-    // Hmac
+    // Hash password
     const encrypted = crypto.createHmac("sha256", process.env.SECRET).update(bodies.password).digest("hex");
     // console.log(encrypted);
 
-    var user = await queryDB(
-      `INSERT INTO users (id,role_id,email,password,name,address,phone,updated_at,created_at) VALUES (DEFAULT,?,?,?,?,?,?,DEFAULT,DEFAULT)`,
-      [bodies.role_id, bodies.email, encrypted, bodies.name, bodies.address, bodies.phone]
-    );
-    console.log(user);
+    // update password on bodies
+    bodies.password = encrypted;
+
+    // insert user document
+    const user = await Users.create(bodies);
+    // console.log(user);
 
     return res.status(200).json({
       code: 201,
       message: "success create user",
       data: {
-        name: bodies.name,
-        email: bodies.email,
+        name: user.name,
+        email: user.email,
       },
     });
   } catch (error) {

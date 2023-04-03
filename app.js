@@ -1,7 +1,5 @@
 const express = require("express");
 
-const app = express();
-
 // router
 const authenticationRouter = require("./routes/authentication.router");
 const productRouter = require("./routes/product.router");
@@ -11,6 +9,11 @@ const wishlistRouter = require("./routes/wishlist.router");
 
 // logger
 const logger = require("./middlewares/errorhandler.middleware");
+
+// mongoose
+const mongoose = require("mongoose");
+
+const app = express();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
@@ -29,6 +32,12 @@ app.use("*", (req, res, next) => {
     message: "endpoint not found",
   });
 });
+
+// connect to mongodb
+mongoose
+  .connect(process.env.MONGO_URI)
+  .then(() => console.log("success connect mongo"))
+  .catch((err) => console.log(err));
 
 // error handler for unexpected error
 app.use((err, req, res, next) => {
