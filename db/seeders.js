@@ -1,40 +1,23 @@
 require("dotenv").config();
 
-const mysql = require("mysql");
 const { faker } = require("@faker-js/faker");
 const crypto = require("crypto");
+const Users = require("./schemas/user.schema");
+const Products = require("./schemas/product.schema");
+const { default: mongoose } = require("mongoose");
 
 async function seedDatabase() {
-  const connection = mysql.createConnection({
-    host: "localhost",
-    user: "root",
-    password: "",
-    database: "ecommerce",
-    port: 3306,
-    timezone: "local",
-  });
-
-  async function queryDB(query, param) {
-    return new Promise((resolve) => {
-      connection.query(query, param, function (err, result, fields) {
-        if (err) {
-          //resolve('err : ' + err.stack);
-          resolve("err :" + err.message);
-        } else {
-          resolve(result);
-        }
-      });
-    });
-  }
+  // connect to mongodb
+  mongoose
+    .connect(process.env.MONGO_URI)
+    .then(() => console.log("Successfully connected to mongodb"))
+    .catch((err) => console.log(err));
 
   function generateUserData() {
     return {
-      role_id: 1,
+      role_id: new mongoose.Types.ObjectId("642a9e2de361627290bd7f6f"),
       email: faker.internet.email().toLowerCase(),
-      password: crypto
-        .createHmac("sha256", "zxcvbnm")
-        .update("admin123")
-        .digest("hex"),
+      password: crypto.createHmac("sha256", "zxcvbnm").update("admin123").digest("hex"),
       name: `${faker.name.firstName()} ${faker.name.lastName()}`,
       address: faker.address.city(),
       phone: faker.phone.number("08##########"),
@@ -43,15 +26,7 @@ async function seedDatabase() {
 
   for (let i = 0; i < 10; i++) {
     const userData = generateUserData();
-    const insertQuery = `INSERT INTO users (id,role_id,email,password,name,address,phone,created_at,updated_at) VALUES (DEFAULT,?,?,?,?,?,?,DEFAULT,DEFAULT)`;
-    const user = await queryDB(insertQuery, [
-      userData.role_id,
-      userData.email,
-      userData.password,
-      userData.name,
-      userData.address,
-      userData.phone,
-    ]);
+    const user = await Users.create(userData);
     console.log(user);
   }
 
@@ -66,18 +41,11 @@ async function seedDatabase() {
 
   for (let i = 0; i < 10; i++) {
     const productData = generateProductData();
-    const insertQuery = `INSERT INTO products (code, name, price, weight, qty, updated_at, created_at) VALUES (DEFAULT,?,?,?,?,DEFAULT,DEFAULT)`;
-    const product = await queryDB(insertQuery, [
-      productData.name,
-      productData.price,
-      productData.weight,
-      productData.qty,
-    ]);
+    const product = await Products.create(productData);
     console.log(product);
   }
 
   console.log("Seeding completed !");
-  await connection.end();
 }
 
 seedDatabase();
