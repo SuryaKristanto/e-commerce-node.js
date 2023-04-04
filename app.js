@@ -36,7 +36,7 @@ app.use("*", (req, res, next) => {
 // connect to mongodb
 mongoose
   .connect(process.env.MONGO_URI)
-  .then(() => console.log("success connect mongo"))
+  .then(() => console.log("Successfully connected to mongodb"))
   .catch((err) => console.log(err));
 
 // error handler for unexpected error

@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 
 const roleSchema = new mongoose.Schema(
   {
-    name: { type: String, required: [true, "Please provide a name for the role"] },
+    name: { type: String, enum: ["admin", "member", "guest"], required: [true, "Please provide a name for the role"] },
   },
   { timestamps: true }
 );
