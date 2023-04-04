@@ -6,7 +6,6 @@ const transporter = require("../utils/nodemailer");
 const moment = require("moment");
 const Roles = require("../db/schemas/role.schema");
 const Users = require("../db/schemas/user.schema");
-const { default: mongoose } = require("mongoose");
 const NewError = require("../helpers/error-stack.helper");
 
 const register = async (req, res, next) => {
@@ -43,7 +42,7 @@ const register = async (req, res, next) => {
     // insert user document
     const user = await Users.create(bodies);
 
-    return res.status(200).json({
+    return res.status(201).json({
       code: 201,
       message: "Success create user",
       data: {
@@ -62,7 +61,6 @@ const login = async (req, res, next) => {
 
     // check if email exist
     const user = await Users.find({ email: email }, "_id role_id email password");
-    console.log(user);
 
     // if not exist, throw error user not found
     if (!user) {
@@ -81,16 +79,16 @@ const login = async (req, res, next) => {
     // decide the role name based on role_id
     var roleName = "";
 
-    if (user[0].role_id === new mongoose.Types.ObjectId("642a9e2de361627290bd7f6f")) {
+    if (user[0].role_id.toString() === "642a9e2de361627290bd7f6f") {
       roleName = "admin";
-    } else if (user[0].role_id === new mongoose.Types.ObjectId("642a9e33e361627290bd7f71")) {
+    } else if (user[0].role_id.toString() === "642a9e33e361627290bd7f71") {
       roleName = "member";
     } else {
       roleName = "guest";
     }
 
     // if the password match, generate token
-    const token = jwt.sign({ user_id: user._id, role: roleName }, process.env.JWT_SECRET, {
+    const token = jwt.sign({ user_id: user[0]._id, role: roleName }, process.env.JWT_SECRET, {
       expiresIn: process.env.JWT_EXPIRES_IN,
     });
 

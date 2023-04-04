@@ -1,50 +1,31 @@
-const connection = require("../db");
-
-async function queryDB(query, param) {
-  return new Promise((resolve) => {
-    connection.query(query, param, function (err, result, fields) {
-      if (err) {
-        //resolve('err : ' + err.stack);
-        resolve("err :" + err.message);
-      } else {
-        resolve(result);
-      }
-    });
-  });
-}
+const Products = require("../db/schemas/product.schema");
+const NewError = require("../helpers/error-stack.helper");
 
 const productList = async (req, res, next) => {
   try {
-    const page = req.body.page;
-    const limit = req.body.limit;
+    const { page, limit } = req.body;
 
     // Calculate the offset
     const offset = (page - 1) * limit;
 
-    const products = await queryDB(
-      `SELECT name, price FROM products WHERE deleted_at IS NULL LIMIT ? OFFSET ?`,
-      [limit, offset]
-    );
+    // find all product document
+    const products = await Products.find({ deleted_at: null }, { _id: 0, name: 1, price: 1 }).skip(offset).limit(limit);
 
-    const isProductExist = products.length > 0;
-    if (!isProductExist) {
-      // kalo ngga ada data, maka return status
-      return res.status(404).json({
-        message: "product not found",
-      });
+    // check if product exist
+    if (!products) {
+      throw new NewError(404, "Product not found");
     }
-    // console.log(isProductExist);
 
-    const count = await queryDB(
-      "SELECT name FROM products WHERE deleted_at IS NULL"
-    );
+    // count product document
+    const count = await Products.countDocuments({ deleted_at: null });
 
+    // pagination information
     const pagination = {
-      totalFindings: count.length,
+      totalFindings: count,
       currenPage: page,
-      nextPage: Math.min(Math.ceil(count.length / limit), page + 1),
+      nextPage: Math.min(Math.ceil(count / limit), page + 1),
       prevPage: Math.max(1, page - 1),
-      totalPage: Math.ceil(count.length / limit),
+      totalPage: Math.ceil(count / limit),
     };
 
     return res.status(200).json({
@@ -61,19 +42,16 @@ const createProduct = async (req, res, next) => {
   try {
     const bodies = req.body;
 
-    const product = await queryDB(
-      `INSERT INTO products (code, name, price, weight, qty, updated_at, created_at) VALUES (DEFAULT,?,?,?,?,DEFAULT,DEFAULT)`,
-      [bodies.name, bodies.price, bodies.weight, bodies.qty]
-    );
-    console.log(product);
+    // insert product document
+    const product = await Products.create(bodies);
 
-    return res.status(200).json({
-      message: "success create product",
+    return res.status(201).json({
+      message: "Success create product",
       data: {
-        name: bodies.name,
-        price: bodies.price,
-        weight: bodies.weight,
-        qty: bodies.qty,
+        name: product.name,
+        price: product.price,
+        weight: product.weight,
+        qty: product.qty,
       },
     });
   } catch (error) {
@@ -83,26 +61,16 @@ const createProduct = async (req, res, next) => {
 
 const deleteProduct = async (req, res, next) => {
   try {
-    const { code } = req.params;
+    const { _id } = req.params;
 
-    const findItem = await queryDB(
-      `SELECT name FROM products WHERE code = ? AND deleted_at IS NULL`,
-      [code]
-    );
-    console.log(findItem);
-    if (findItem.length < 1)
-      return res.status(404).json({
-        message: "product not found",
-      });
+    const product = await Products.findOneAndUpdate({ _id: _id, deleted_at: null }, { deleted_at: new Date() });
 
-    const product = await queryDB(
-      `UPDATE products SET deleted_at = NOW() WHERE code = ?`,
-      [code]
-    );
-    console.log(product);
+    if (!product) {
+      throw new NewError(404, "Product not found");
+    }
 
     return res.status(200).json({
-      message: "success remove product",
+      message: "Success remove product",
     });
   } catch (error) {
     next(error);
@@ -111,26 +79,18 @@ const deleteProduct = async (req, res, next) => {
 
 const updateProduct = async (req, res, next) => {
   try {
-    const product = await queryDB(
-      `SELECT code FROM products WHERE code = ? AND deleted_at IS NULL`,
-      [req.params.code]
-    );
-    console.log(product);
-    if (product.length < 1) {
-      return res.status(404).json({
-        message: "product not found",
-      });
+    const { _id } = req.params;
+
+    // find and update product
+    const product = await Products.findOneAndUpdate({ _id: _id, deleted_at: null }, req.body);
+
+    // check if the product exist
+    if (!product) {
+      throw new NewError(404, "Product not found");
     }
 
-    const bodies = req.body;
-    const update = await queryDB(
-      `UPDATE products SET name = COALESCE(?, name), price = COALESCE(?, price), weight = COALESCE(?, weight), qty = COALESCE(?, qty) WHERE code = ?`,
-      [bodies.name, bodies.price, bodies.weight, bodies.qty, req.params.code]
-    );
-    console.log(update);
-
-    res.status(200).json({
-      message: "success update product",
+    return res.status(200).json({
+      message: "Success update product",
     });
   } catch (error) {
     next(error);
@@ -139,15 +99,12 @@ const updateProduct = async (req, res, next) => {
 
 const productDetail = async (req, res, next) => {
   try {
-    const product = await queryDB(
-      `SELECT name, price, weight, qty FROM products WHERE name = ? AND deleted_at IS NULL`,
-      [req.params.name]
-    );
+    // find product
+    const product = await Products.find({ name: req.params.name, deleted_at: null }, { _id: 0, name: 1, price: 1, weight: 1, qty: 1 });
 
-    if (product.length < 1) {
-      return res.status(404).json({
-        message: "product not found",
-      });
+    // check if the product exist
+    if (!product) {
+      throw new NewError(404, "Product not found");
     }
 
     return res.status(200).json({
@@ -161,31 +118,21 @@ const productDetail = async (req, res, next) => {
 
 const searchProduct = async (req, res, next) => {
   try {
-    const name = req.query;
-    // console.log(name);
-    let productData = [];
+    const { name } = req.query;
 
-    const product = await queryDB(
-      `SELECT name, price FROM products WHERE deleted_at IS NULL`
-    );
-    // console.log(product);
+    // find all product document
+    const products = await Products.find({ deleted_at: null }, { _id: 0, name: 1, price: 1 });
 
-    for (let i = 0; i < product.length; i++) {
-      productData[i] = {};
-      productData[i] = product[i];
-    }
-    // console.log(productData);
-
-    const filteredProduct = productData.filter((user) => {
-      let isValid = true;
-      for (key in name) {
-        // console.log(key, user[key], name[key]);
-        isValid = isValid && user[key] == name[key];
-      }
-      return isValid;
+    // filter the product
+    const filteredProducts = products.filter((product) => {
+      const nameMatches = product.name.toLowerCase().includes(name.toLowerCase());
+      return nameMatches;
     });
-    // console.log(filteredProduct);
-    res.send(filteredProduct);
+
+    return res.status(200).json({
+      message: `Search results for '${name}'`,
+      data: filteredProducts,
+    });
   } catch (error) {
     next(error);
   }
