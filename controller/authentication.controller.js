@@ -21,17 +21,17 @@ const register = async (req, res, next) => {
 
     // check if role_id exist
     if (!role) {
-      throw new NewError(404, "role not found");
+      throw new NewError(404, "Role not found");
     }
 
     // check if email already exist
     if (email) {
-      throw new NewError(409, "email already exist");
+      throw new NewError(409, "Email already exist");
     }
 
     // check if phone already exist
     if (phone) {
-      throw new NewError(409, "phone already exist");
+      throw new NewError(409, "Phone already exist");
     }
 
     // Hash password
@@ -45,7 +45,7 @@ const register = async (req, res, next) => {
 
     return res.status(200).json({
       code: 201,
-      message: "success create user",
+      message: "Success create user",
       data: {
         name: user.name,
         email: user.email,
@@ -66,7 +66,7 @@ const login = async (req, res, next) => {
 
     // if not exist, throw error user not found
     if (!user) {
-      throw new NewError(404, "user not found");
+      throw new NewError(404, "User not found");
     }
 
     // compare password if exist
@@ -97,7 +97,7 @@ const login = async (req, res, next) => {
     // send the token in response
     return res.status(200).json({
       code: 200,
-      message: "login succesful",
+      message: "Login succesful",
       token,
     });
   } catch (error) {
@@ -115,7 +115,7 @@ const forgotPassword = async (req, res, next) => {
 
     // if user email doesn't exist, send error message
     if (!userEmail) {
-      throw new NewError(404, "email not found");
+      throw new NewError(404, "Email not found");
     }
 
     // creater reset token
@@ -165,7 +165,7 @@ const resetPassword = async (req, res, next) => {
 
     // if not exist, throw error
     if (!user) {
-      throw new NewError(404, "email not found");
+      throw new NewError(404, "Email not found");
     }
 
     // change token_expired_at date format with moment
@@ -180,17 +180,17 @@ const resetPassword = async (req, res, next) => {
           const newPassword = await Users.findOneAndUpdate({ email: email }, { password: encrypted });
           console.log(newPassword);
         } else {
-          throw new NewError(401, "incorrect new password confirmation");
+          throw new NewError(401, "Incorrect new password confirmation");
         }
       } else {
-        throw new NewError(410, "expired link");
+        throw new NewError(410, "Expired link");
       }
     } else {
-      throw new NewError(403, '"incorrect reset token"');
+      throw new NewError(403, '"Incorrect reset token"');
     }
 
     return res.status(200).json({
-      message: "reset password success",
+      message: "Password reset successful",
     });
   } catch (error) {
     next(error);
