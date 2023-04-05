@@ -175,10 +175,7 @@ const orderStatus = async (req, res, next) => {
     // console.log(existOrder);
 
     if (!existOrder) {
-      throw {
-        code: 404,
-        message: "Order not found",
-      };
+      throw new NewError(404, "Order not found");
     }
 
     return res.status(200).json({

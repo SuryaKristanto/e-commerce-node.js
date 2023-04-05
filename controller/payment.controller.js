@@ -1,38 +1,24 @@
-const connection = require("../db");
-
-async function queryDB(query, param) {
-  return new Promise((resolve) => {
-    connection.query(query, param, function (err, result, fields) {
-      if (err) {
-        //resolve('err : ' + err.stack);
-        resolve("err :" + err.message);
-      } else {
-        resolve(result);
-      }
-    });
-  });
-}
+const Orders = require("../db/schemas/order.schema");
+const NewError = require("../helpers/error-stack.helper");
 
 const orderPayment = async (req, res, next) => {
   try {
-    const queryString = req.query;
-    const bodies = req.body;
+    const { user_id, order_no } = req.query;
+    const { payment_amount } = req.body;
 
-    const order = await queryDB(`SELECT total_price FROM orders WHERE user_id = ? AND order_no = ?`, [queryString.user_id, queryString.order_no]);
-    console.log(order);
+    // const order = await queryDB(`SELECT total_price FROM orders WHERE user_id = ? AND order_no = ?`, [queryString.user_id, queryString.order_no]);
+    const order = await Orders.findOne({ user_id: user_id, order_no: order_no }, { _id: 0, total_price: 1 });
+    // console.log(order);
 
-    if (order[0].total_price == bodies.payment_amount) {
-      const payment = await queryDB(`UPDATE orders SET status = 'PROCESSING' WHERE user_id = ? AND order_no = ?`, [queryString.user_id, queryString.order_no]);
-      console.log(payment);
+    if (order.total_price == payment_amount) {
+      const payment = await Orders.findOneAndUpdate({ user_id: user_id, order_no: order_no }, { status: "PROCESSING" });
+      // console.log(payment);
 
       return res.status(200).json({
-        message: "payment successful",
+        message: "Payment successful",
       });
     } else {
-      throw {
-        code: 400,
-        message: "payment failed",
-      };
+      throw new NewError(400, "Payment failed");
     }
   } catch (error) {
     next(error);
