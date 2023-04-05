@@ -3,7 +3,7 @@ const Joi = require("joi");
 const createOrderSchema = Joi.object({
   products: Joi.array().items(
     Joi.object({
-      code: Joi.number().required(),
+      code: Joi.string().required(),
       qty: Joi.number().required(),
     })
   ),

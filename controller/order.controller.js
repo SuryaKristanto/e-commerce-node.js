@@ -1,78 +1,62 @@
-const connection = require("../db");
-
-async function queryDB(query, param) {
-  return new Promise((resolve) => {
-    connection.query(query, param, function (err, result, fields) {
-      if (err) {
-        //resolve('err : ' + err.stack);
-        resolve("err :" + err.message);
-      } else {
-        resolve(result);
-      }
-    });
-  });
-}
+const { default: mongoose } = require("mongoose");
+const Products = require("../db/schemas/product.schema");
+const NewError = require("../helpers/error-stack.helper");
+const Orders = require("../db/schemas/order.schema");
+const OrderProducts = require("../db/schemas/order_product.schema");
+const Users = require("../db/schemas/user.schema");
 
 const createOrder = async (req, res, next) => {
   try {
-    // cek productsnya ada semua ngga?
-    const { products } = req.body;
-    console.log(products);
-    const { payment_method } = req.body;
-    console.log(payment_method);
+    const { products, payment_method } = req.body;
 
     const productCode = products.map((product) => {
       return product.code;
     });
-    console.log(productCode);
+    // console.log(productCode);
 
-    const placeholders = productCode.map(() => "?").join(", ");
-    // console.log(placeholders);
-
-    const existProducts = await queryDB(`SELECT * FROM products WHERE code IN (${placeholders}) AND deleted_at IS NULL`, productCode);
-    console.log(existProducts);
+    // check if the product exist
+    const existProducts = await Products.find({ _id: { $in: productCode }, deleted_at: null });
+    // console.log(existProducts);
 
     if (existProducts.length !== products.length) {
-      throw {
-        code: 404,
-        message: "product not found",
-      };
+      throw new NewError(404, "Product not found");
     }
 
-    try {
-      await connection.beginTransaction();
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
+    try {
       const order_no = Math.floor(Math.random() * 1000);
 
-      const order = await queryDB(
-        `INSERT INTO orders (id, user_id, order_no, status, payment_method, updated_at, created_at) VALUES (DEFAULT,?,?,DEFAULT,?,DEFAULT,DEFAULT)`,
-        [req.user_id, order_no, payment_method]
-      );
-      console.log(order);
+      // insert order document
+      const order = await Orders.create({ user_id: req.user_id, order_no: order_no, payment_method: payment_method });
+      // console.log(order);
 
       const totalPrice = [];
       await Promise.all(
         existProducts.map(async (product) => {
-          const selectedPayload = products.find((val) => val.code === product.code);
-          console.log(selectedPayload);
+          const selectedPayload = products.find((val) => val.code === product._id.toString());
+          // console.log(selectedPayload);
 
-          deductQty = product.qty - selectedPayload.qty;
-          console.log(deductQty);
+          const deductQty = product.qty - selectedPayload.qty;
+          // console.log(deductQty);
+
           // deduct product qty
-          const update = await queryDB(`UPDATE products SET qty = ? WHERE qty = ?`, [deductQty, product.qty]);
-          console.log(update);
+          const update = await Products.findByIdAndUpdate(product._id, { qty: deductQty });
+          // console.log(update);
 
-          // create order_products
-          const orderProducts = await queryDB(
-            `INSERT INTO order_products (id, product_code, order_id, qty_order, updated_at, created_at) VALUES (DEFAULT,?,?,?,DEFAULT,DEFAULT)`,
-            [product.code, order.insertId, selectedPayload.qty]
-          );
-          console.log(orderProducts);
+          // create order_product document
+          const orderProducts = await OrderProducts.create({
+            product_code: product._id.toString(),
+            order_id: order._id,
+            qty_order: selectedPayload.qty,
+          });
+          // console.log(orderProducts);
 
           const totalPerProduct = selectedPayload.qty * product.price;
-          console.log(totalPerProduct);
+          // console.log(totalPerProduct);
           totalPrice.push(totalPerProduct);
-          console.log(totalPrice);
+          // console.log(totalPrice);
         })
       );
 
@@ -80,22 +64,28 @@ const createOrder = async (req, res, next) => {
       for (let i = 0; i < totalPrice.length; i++) {
         sum += totalPrice[i];
       }
-      console.log(sum);
+      // console.log(sum);
 
-      const updateTotalPrice = await queryDB(`UPDATE orders SET total_price = ? WHERE order_no = ?`, [sum, order_no]);
-      console.log(updateTotalPrice);
+      // update total price in order document
+      const updateTotalPrice = await Orders.findOneAndUpdate({ order_no: order_no }, { total_price: sum });
+      // console.log(updateTotalPrice);
 
-      await connection.commit();
-      console.log("Transaction committed successfully");
+      // Commit the transaction
+      await session.commitTransaction();
+
+      console.log("Transaction committed!");
     } catch (error) {
-      await connection.rollback();
-      console.log("Transaction rolled back due to error: " + error);
+      // Abort the transaction if any error occurred
+      await session.abortTransaction();
+
+      console.log("Transaction aborted:", error);
     } finally {
-      await connection.end();
+      // End the session after the transaction is completed or aborted
+      session.endSession();
     }
 
     return res.status(201).json({
-      message: "success create order",
+      message: "Success create order",
     });
   } catch (error) {
     next(error);
@@ -104,46 +94,71 @@ const createOrder = async (req, res, next) => {
 
 const orderList = async (req, res, next) => {
   try {
-    const userId = await queryDB(`SELECT id FROM users WHERE id = ? AND deleted_at IS NULL`, [req.user_id]);
-    // console.log(userId);
+    // find user
+    const userId = await Users.findOne({ _id: req.user_id, deleted_at: null });
 
-    const orders = await queryDB(
-      `SELECT orders.order_no, orders.status, orders.total_price, order_products.product_code AS "product_code", order_products.qty_order AS "qty_order", products.name AS "name", products.price AS "price" FROM orders LEFT JOIN order_products ON orders.id = order_products.order_id LEFT JOIN products ON order_products.product_code = products.code AND (products.deleted_at IS NULL) WHERE orders.deleted_at IS NULL AND orders.user_id = ? AND status <> 'FINISHED' ORDER BY orders.created_at DESC`,
-      userId[0].id
-    );
-    console.log(orders);
-
-    const order_products = [];
-    for (let i = 0; i < orders.length; i++) {
-      const existingOrderIndex = order_products.findIndex((order) => order.order_no === orders[i].order_no);
-
-      if (existingOrderIndex > -1) {
-        order_products[existingOrderIndex].products.push({
-          product_code: orders[i].product_code,
-          qty_order: orders[i].qty_order,
-          name: orders[i].name,
-          price: orders[i].price,
-        });
-      } else {
-        order_products.push({
-          order_no: orders[i].order_no,
-          status: orders[i].status,
-          total_price: orders[i].total_price,
-          products: [
-            {
-              product_code: orders[i].product_code,
-              qty_order: orders[i].qty_order,
-              name: orders[i].name,
-              price: orders[i].price,
+    // find order and the product
+    const orders = await Orders.aggregate([
+      {
+        $match: {
+          deleted_at: null,
+          user_id: new mongoose.Types.ObjectId(userId),
+          status: { $ne: "FINISHED" },
+        },
+      },
+      {
+        $sort: {
+          created_at: -1,
+        },
+      },
+      {
+        $lookup: {
+          from: "order_products",
+          localField: "_id",
+          foreignField: "order_id",
+          as: "order_products",
+        },
+      },
+      {
+        $unwind: "$order_products",
+      },
+      {
+        $lookup: {
+          from: "products",
+          localField: "order_products.product_code",
+          foreignField: "_id",
+          as: "order_products.product",
+        },
+      },
+      {
+        $unwind: "$order_products.product",
+      },
+      {
+        $match: {
+          "order_products.product.deleted_at": null,
+        },
+      },
+      {
+        $group: {
+          _id: "$order_no",
+          status: { $first: "$status" },
+          total_price: { $first: "$total_price" },
+          products: {
+            $push: {
+              product_code: "$order_products.product_code",
+              qty_order: "$order_products.qty_order",
+              name: "$order_products.product.name",
+              price: "$order_products.product.price",
             },
-          ],
-        });
-      }
-    }
-    // console.log(order_products);
-    res.status(200).json({
+          },
+        },
+      },
+    ]);
+    // console.log(orders);
+
+    return res.status(200).json({
       message: "Order List",
-      data: order_products,
+      data: orders,
     });
   } catch (error) {
     next(error);
@@ -152,22 +167,23 @@ const orderList = async (req, res, next) => {
 
 const orderStatus = async (req, res, next) => {
   try {
-    const queryString = req.query;
-    console.log(queryString);
+    const { id } = req.query;
+    // console.log(queryString);
 
-    const existOrder = await queryDB(`SELECT status FROM orders WHERE id = ? AND deleted_at IS NULL`, queryString.id);
-    console.log(existOrder);
+    // find the order status
+    const existOrder = await Orders.findOne({ _id: id, deleted_at: null }, { _id: 0, status: 1 });
+    // console.log(existOrder);
 
-    if (existOrder.length < 1) {
+    if (!existOrder) {
       throw {
         code: 404,
-        message: "order not found",
+        message: "Order not found",
       };
     }
 
     return res.status(200).json({
       code: 200,
-      message: existOrder[0],
+      message: existOrder,
     });
   } catch (error) {
     next(error);
@@ -176,46 +192,71 @@ const orderStatus = async (req, res, next) => {
 
 const orderHistory = async (req, res, next) => {
   try {
-    const userId = await queryDB(`SELECT id FROM users WHERE id = ? AND deleted_at IS NULL`, [req.user_id]);
-    // console.log(userId);
+    // find user
+    const userId = await Users.findOne({ _id: req.user_id, deleted_at: null });
 
-    const orders = await queryDB(
-      `SELECT orders.order_no, orders.status, orders.total_price, order_products.product_code AS "product_code", order_products.qty_order AS "qty_order", products.name AS "name", products.price AS "price" FROM orders LEFT JOIN order_products ON orders.id = order_products.order_id LEFT JOIN products ON order_products.product_code = products.code AND (products.deleted_at IS NULL) WHERE orders.deleted_at IS NULL AND orders.user_id = ? AND status = 'FINISHED' ORDER BY orders.created_at DESC`,
-      userId[0].id
-    );
-    console.log(orders);
-
-    const order_products = [];
-    for (let i = 0; i < orders.length; i++) {
-      const existingOrderIndex = order_products.findIndex((order) => order.order_no === orders[i].order_no);
-
-      if (existingOrderIndex > -1) {
-        order_products[existingOrderIndex].products.push({
-          product_code: orders[i].product_code,
-          qty_order: orders[i].qty_order,
-          name: orders[i].name,
-          price: orders[i].price,
-        });
-      } else {
-        order_products.push({
-          order_no: orders[i].order_no,
-          status: orders[i].status,
-          total_price: orders[i].total_price,
-          products: [
-            {
-              product_code: orders[i].product_code,
-              qty_order: orders[i].qty_order,
-              name: orders[i].name,
-              price: orders[i].price,
+    // find order and the product
+    const orders = await Orders.aggregate([
+      {
+        $match: {
+          deleted_at: null,
+          user_id: new mongoose.Types.ObjectId(userId),
+          status: { $eq: "FINISHED" },
+        },
+      },
+      {
+        $sort: {
+          created_at: -1,
+        },
+      },
+      {
+        $lookup: {
+          from: "order_products",
+          localField: "_id",
+          foreignField: "order_id",
+          as: "order_products",
+        },
+      },
+      {
+        $unwind: "$order_products",
+      },
+      {
+        $lookup: {
+          from: "products",
+          localField: "order_products.product_code",
+          foreignField: "_id",
+          as: "order_products.product",
+        },
+      },
+      {
+        $unwind: "$order_products.product",
+      },
+      {
+        $match: {
+          "order_products.product.deleted_at": null,
+        },
+      },
+      {
+        $group: {
+          _id: "$order_no",
+          status: { $first: "$status" },
+          total_price: { $first: "$total_price" },
+          products: {
+            $push: {
+              product_code: "$order_products.product_code",
+              qty_order: "$order_products.qty_order",
+              name: "$order_products.product.name",
+              price: "$order_products.product.price",
             },
-          ],
-        });
-      }
-    }
-    // console.log(order_products);
-    res.status(200).json({
+          },
+        },
+      },
+    ]);
+    // console.log(orders);
+
+    return res.status(200).json({
       message: "Order List",
-      data: order_products,
+      data: orders,
     });
   } catch (error) {
     next(error);
