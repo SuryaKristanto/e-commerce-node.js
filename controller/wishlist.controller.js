@@ -1,27 +1,16 @@
-const connection = require("../db");
-
-async function queryDB(query, param) {
-  return new Promise((resolve) => {
-    connection.query(query, param, function (err, result, fields) {
-      if (err) {
-        //resolve('err : ' + err.stack);
-        resolve("err :" + err.message);
-      } else {
-        resolve(result);
-      }
-    });
-  });
-}
+const { default: mongoose } = require("mongoose");
+const Wishlist = require("../db/schemas/wishlist.schema");
 
 const addWishlist = async (req, res, next) => {
   try {
-    const bodies = req.body;
+    const { product_code } = req.body;
 
-    const add = await queryDB(`INSERT INTO wishlist (id, user_id, product_code, created_at) VALUES (DEFAULT,?,?,DEFAULT)`, [req.user_id, bodies.product_code]);
-    console.log(add);
+    // insert wishlist document
+    const add = await Wishlist.create({ user_id: req.user_id, product_code: product_code });
+    // console.log(add);
 
-    res.status(200).json({
-      message: "added to wishlist",
+    return res.status(200).json({
+      message: "Added to wishlist",
     });
   } catch (error) {
     next(error);
@@ -30,7 +19,7 @@ const addWishlist = async (req, res, next) => {
 
 const getWishlist = async (req, res, next) => {
   try {
-    const product = await queryDB(`SELECT product_code FROM wishlist WHERE user_id = ? ORDER BY created_at DESC`, req.user_id);
+    const product = await Wishlist.find({ user_id: req.user_id }, { _id: 0, product_code: 1 }).sort({ created_at: -1 });
     // console.log(product);
 
     let productCode = [];
@@ -39,16 +28,17 @@ const getWishlist = async (req, res, next) => {
     }
     // console.log(productCode);
 
-    const placeholders = productCode.map(() => "?").join(", ");
-    // console.log(placeholders);
+    // find wishlist and product document
+    const list = await Wishlist.aggregate([
+      { $match: { user_id: new mongoose.Types.ObjectId(req.user_id), product_code: { $in: productCode } } },
+      { $lookup: { from: "products", localField: "product_code", foreignField: "_id", as: "product" } },
+      { $unwind: "$product" },
+      { $project: { _id: 0, "product.name": 1, "product.price": 1 } },
+      { $sort: { created_at: -1 } },
+    ]);
+    // console.log(list);
 
-    const list = await queryDB(
-      `SELECT products.name, products.price FROM wishlist LEFT JOIN products ON wishlist.product_code = products.code WHERE code IN (${placeholders}) AND wishlist.user_id = ? AND deleted_at IS NULL ORDER BY wishlist.created_at DESC`,
-      [productCode, req.user_id]
-    );
-    console.log(list);
-
-    res.status(200).json({
+    return res.status(200).json({
       message: "Wishlist",
       data: list,
     });
@@ -59,13 +49,14 @@ const getWishlist = async (req, res, next) => {
 
 const removeWishlist = async (req, res, next) => {
   try {
-    const bodies = req.body;
+    const { product_code } = req.body;
 
-    const remove = await queryDB(`DELETE FROM wishlist WHERE user_id = ? AND product_code = ?`, [req.user_id, bodies.product_code]);
-    console.log(remove);
+    // delete wishlist document
+    const remove = await Wishlist.deleteOne({ user_id: req.user_id, product_code: product_code });
+    // console.log(remove);
 
-    res.status(200).json({
-      message: "removed from wishlist",
+    return res.status(200).json({
+      message: "Removed from wishlist",
     });
   } catch (error) {
     next(error);
