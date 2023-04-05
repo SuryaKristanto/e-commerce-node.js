@@ -1,7 +1,5 @@
 const { register, login, forgotPassword, resetPassword } = require("../controller/authentication.controller");
 
-const { createRole } = require("../controller/role.controller");
-
 const validation = require("../middlewares/validation.middleware");
 
 const registerSchema = require("../validations/register.schema");
@@ -15,6 +13,5 @@ router.post("/register", validation(registerSchema), register);
 router.post("/login", validation(loginSchema), login);
 router.post("/forgot-password", validation(forgotPasswordSchema), forgotPassword);
 router.post("/reset-password", validation(resetPasswordSchema), resetPassword);
-router.post("/role", createRole);
 
 module.exports = router;
