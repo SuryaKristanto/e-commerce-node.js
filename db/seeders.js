@@ -5,6 +5,7 @@ const crypto = require("crypto");
 const Users = require("./schemas/user.schema");
 const Products = require("./schemas/product.schema");
 const { default: mongoose } = require("mongoose");
+const Roles = require("./schemas/role.schema");
 
 async function seedDatabase() {
   // connect to mongodb
@@ -12,6 +13,10 @@ async function seedDatabase() {
     .connect(process.env.MONGO_URI)
     .then(() => console.log("Successfully connected to mongodb"))
     .catch((err) => console.log(err));
+
+  await Roles.create({ name: "admin" });
+  await Roles.create({ name: "member" });
+  await Roles.create({ name: "guest" });
 
   function generateUserData() {
     return {
