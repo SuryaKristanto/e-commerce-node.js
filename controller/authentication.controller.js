@@ -116,7 +116,7 @@ const forgotPassword = async (req, res, next) => {
       throw new NewError(404, "Email not found");
     }
 
-    // creater reset token
+    // create reset token
     const resetToken = crypto.randomBytes(16).toString("hex");
 
     const token = resetToken;
@@ -159,7 +159,6 @@ const resetPassword = async (req, res, next) => {
 
     // check if the user email exist
     const user = await Users.findOne({ email: email });
-    console.log(user);
 
     // if not exist, throw error
     if (!user) {
@@ -176,7 +175,6 @@ const resetPassword = async (req, res, next) => {
         // confirm the new password
         if (bodies.confirm_new_password === bodies.new_password) {
           const newPassword = await Users.findOneAndUpdate({ email: email }, { password: encrypted });
-          console.log(newPassword);
         } else {
           throw new NewError(401, "Incorrect new password confirmation");
         }
@@ -184,7 +182,7 @@ const resetPassword = async (req, res, next) => {
         throw new NewError(410, "Expired link");
       }
     } else {
-      throw new NewError(403, '"Incorrect reset token"');
+      throw new NewError(403, "Incorrect reset token");
     }
 
     return res.status(200).json({

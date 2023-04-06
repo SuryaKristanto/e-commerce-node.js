@@ -63,6 +63,7 @@ const deleteProduct = async (req, res, next) => {
   try {
     const { _id } = req.params;
 
+    // soft delete
     const product = await Products.findOneAndUpdate({ _id: _id, deleted_at: null }, { deleted_at: new Date() });
 
     if (!product) {

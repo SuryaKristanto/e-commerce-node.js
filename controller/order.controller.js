@@ -12,11 +12,9 @@ const createOrder = async (req, res, next) => {
     const productCode = products.map((product) => {
       return product.code;
     });
-    // console.log(productCode);
 
     // check if the product exist
     const existProducts = await Products.find({ _id: { $in: productCode }, deleted_at: null });
-    // console.log(existProducts);
 
     if (existProducts.length !== products.length) {
       throw new NewError(404, "Product not found");
@@ -30,20 +28,16 @@ const createOrder = async (req, res, next) => {
 
       // insert order document
       const order = await Orders.create({ user_id: req.user_id, order_no: order_no, payment_method: payment_method });
-      // console.log(order);
 
       const totalPrice = [];
       await Promise.all(
         existProducts.map(async (product) => {
           const selectedPayload = products.find((val) => val.code === product._id.toString());
-          // console.log(selectedPayload);
 
           const deductQty = product.qty - selectedPayload.qty;
-          // console.log(deductQty);
 
           // deduct product qty
           const update = await Products.findByIdAndUpdate(product._id, { qty: deductQty });
-          // console.log(update);
 
           // create order_product document
           const orderProducts = await OrderProducts.create({
@@ -51,24 +45,19 @@ const createOrder = async (req, res, next) => {
             order_id: order._id,
             qty_order: selectedPayload.qty,
           });
-          // console.log(orderProducts);
 
           const totalPerProduct = selectedPayload.qty * product.price;
-          // console.log(totalPerProduct);
           totalPrice.push(totalPerProduct);
-          // console.log(totalPrice);
         })
       );
 
-      var sum = 0;
+      const sum = 0;
       for (let i = 0; i < totalPrice.length; i++) {
         sum += totalPrice[i];
       }
-      // console.log(sum);
 
       // update total price in order document
       const updateTotalPrice = await Orders.findOneAndUpdate({ order_no: order_no }, { total_price: sum });
-      // console.log(updateTotalPrice);
 
       // Commit the transaction
       await session.commitTransaction();
@@ -154,7 +143,6 @@ const orderList = async (req, res, next) => {
         },
       },
     ]);
-    // console.log(orders);
 
     return res.status(200).json({
       message: "Order List",
@@ -168,11 +156,9 @@ const orderList = async (req, res, next) => {
 const orderStatus = async (req, res, next) => {
   try {
     const { id } = req.query;
-    // console.log(queryString);
 
     // find the order status
     const existOrder = await Orders.findOne({ _id: id, deleted_at: null }, { _id: 0, status: 1 });
-    // console.log(existOrder);
 
     if (!existOrder) {
       throw new NewError(404, "Order not found");
@@ -249,7 +235,6 @@ const orderHistory = async (req, res, next) => {
         },
       },
     ]);
-    // console.log(orders);
 
     return res.status(200).json({
       message: "Order List",
