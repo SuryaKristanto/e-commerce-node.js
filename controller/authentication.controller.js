@@ -5,6 +5,7 @@ const crypto = require("crypto");
 const connection = require("../db");
 const transporter = require("../utils/nodemailer");
 const moment = require("moment");
+const NewError = require("../helpers/error-stack.helper");
 
 async function queryDB(query, param) {
   return new Promise((resolve) => {
@@ -29,48 +30,33 @@ const register = async (req, res, next) => {
 
     var isPhoneExist = await queryDB(`SELECT phone FROM  users WHERE phone = "${bodies.phone}"`);
 
-    // cek apakah role_id nya ada atau tidak
+    // check if role_id exist
     if (isRoleExist.length < 1) {
-      throw {
-        code: 404,
-        message: "role not found",
-      };
+      throw new NewError(404, "Role not found");
     }
-    // console.log(isRoleExist.length);
 
-    // cek apakah ada user yang memiliki email yang sudah di register
-    // if user exist, send error message
+    // check if email already exist
     if (isUserExist.length > 0) {
-      throw {
-        code: 400,
-        message: "email already exist",
-      };
+      throw new NewError(409, "Email already exist");
     }
-    // console.log(isUserExist.length);
 
-    // cek apakah ada user yang memiliki phone yang sudah di register
-    // if user exist, send error message
+    // check if phone already exist
     if (isPhoneExist.length > 0) {
-      throw {
-        code: 400,
-        message: "phone already exist",
-      };
+      throw new NewError(409, "Phone already exist");
     }
 
-    // hash pw karna secret (encrypt)
-    // Hmac
+    // Hash password
     const encrypted = crypto.createHmac("sha256", process.env.SECRET).update(bodies.password).digest("hex");
-    // console.log(encrypted);
 
+    // insert user record
     var user = await queryDB(
       `INSERT INTO users (id,role_id,email,password,name,address,phone,updated_at,created_at) VALUES (DEFAULT,?,?,?,?,?,?,DEFAULT,DEFAULT)`,
       [bodies.role_id, bodies.email, encrypted, bodies.name, bodies.address, bodies.phone]
     );
-    console.log(user);
 
     return res.status(200).json({
       code: 201,
-      message: "success create user",
+      message: "Success create user",
       data: {
         name: bodies.name,
         email: bodies.email,
@@ -85,31 +71,24 @@ const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
-    // cek email tersebut ada ngga di db
+    // check if email exist
     var user = await queryDB(`SELECT id, role_id, email, password FROM users WHERE email = "${email}"`);
-    console.log(user);
 
-    // kalo gaada email, throw error user not found
+    // if not exist, throw error user not found
     if (user.length < 1) {
-      throw {
-        code: 404,
-        message: "user not found",
-      };
+      throw new NewError(404, "User not found");
     }
 
-    // kalo ada kita compare pw
+    // compare password if exist
     const hasedPassword = crypto.createHmac("sha256", process.env.SECRET).update(password).digest("hex");
     const isValidPassword = hasedPassword === user[0].password;
 
-    // kalo pwnya beda, throw invalid pw
+    // if the password different, throw invalid password
     if (!isValidPassword) {
-      throw {
-        code: 401,
-        message: "incorrect password",
-      };
+      throw new NewError(403, "Credentials incorrect");
     }
 
-    // menentukan nama role berdasarkan role_id
+    // decide the role name based on role_id
     var roleName = "";
 
     if (user[0].role_id === 1) {
@@ -120,15 +99,15 @@ const login = async (req, res, next) => {
       roleName = "guest";
     }
 
-    // kalo pwnya sama, generate token
+    // if the password match, generate token
     const token = jwt.sign({ user_id: user[0].id, role: roleName }, process.env.JWT_SECRET, {
       expiresIn: process.env.JWT_EXPIRES_IN,
     });
 
-    // kirim token di respon
+    // send the token in response
     return res.status(200).json({
       code: 200,
-      message: "login succesful",
+      message: "Login succesful",
       token,
     });
   } catch (error) {
@@ -138,30 +117,29 @@ const login = async (req, res, next) => {
 
 const forgotPassword = async (req, res, next) => {
   try {
-    const email = req.body.email;
+    const { email } = req.body;
     const subject = "Reset Your Password";
 
+    // check if the user email exist
     const isUserExist = await queryDB(`SELECT email FROM  users WHERE email = "${email}"`);
 
-    // cek apakah ada user yang memiliki email yang sudah di register
-    // if user doesn't exist, send error message
+    // if user email doesn't exist, send error message
     if (isUserExist.length < 1) {
-      throw {
-        code: 400,
-        message: "email not found",
-      };
+      throw new NewError(404, "Email not found");
     }
-    // console.log(isUserExist.length);
 
+    // create reset token
     const resetToken = crypto.randomBytes(16).toString("hex");
 
     const token = resetToken;
 
+    // create reset token expiration time
     const tokenExpired = moment().add(1, "hour").format("YYYY-MM-DD HH:mm:ss");
 
+    // update user document with the reset token and expiration time
     var user = await queryDB(`UPDATE users SET reset_token = ?, token_expired_at = ? WHERE email = ?`, [token, tokenExpired, email]);
-    // console.log(user);
 
+    // send the reset password link using nodemailer
     let mailOptions = {
       from: process.env.NODEMAILER_USER,
       to: email,
@@ -185,55 +163,42 @@ const forgotPassword = async (req, res, next) => {
 
 const resetPassword = async (req, res, next) => {
   try {
-    email = req.query.email;
-    token = req.query.token;
+    const { email, token } = req.query;
     bodies = req.body;
 
-    const encryptedOld = crypto.createHmac("sha256", process.env.SECRET).update(bodies.old_password).digest("hex");
-    // console.log(encrypted);
+    // Hash new password
+    const encrypted = crypto.createHmac("sha256", process.env.SECRET).update(bodies.new_password).digest("hex");
 
-    const encryptedNew = crypto.createHmac("sha256", process.env.SECRET).update(bodies.new_password).digest("hex");
-    // console.log(encrypted);
+    // check if the user email exist
+    const user = await queryDB(`SELECT password, reset_token, token_expired_at FROM users WHERE email = "${email}"`);
 
-    const reset = await queryDB(`SELECT password, reset_token, token_expired_at FROM users WHERE email = "${email}"`);
-    // console.log(reset);
+    // if not exist, throw error
+    if (!user) {
+      throw new NewError(404, "Email not found");
+    }
 
-    const formatted = moment(reset[0].token_expired_at).format("YYYY-MM-DD HH:mm:ss");
-    // console.log(formatted);
+    // change token_expired_at date format with moment
+    const formatted = moment(user[0].token_expired_at).format("YYYY-MM-DD HH:mm:ss");
 
-    if (token == reset[0].reset_token) {
+    // check if the eset token match
+    if (token === user[0].reset_token) {
+      // check if the token not expired yet
       if (formatted > moment().format("YYYY-MM-DD HH:mm:ss")) {
-        if (reset[0].password == encryptedOld) {
-          if (bodies.confirm_new_password == bodies.new_password) {
-            const newPassword = await queryDB(`UPDATE users SET password = ? WHERE email = ?`, [encryptedNew, email]);
-            console.log(newPassword);
-          } else {
-            throw {
-              code: 400,
-              message: "incorrect new password confirmation",
-            };
-          }
+        // confirm the new password
+        if (bodies.confirm_new_password == bodies.new_password) {
+          const newPassword = await queryDB(`UPDATE users SET password = ? WHERE email = ?`, [encrypted, email]);
         } else {
-          throw {
-            code: 400,
-            message: "incorrect old password",
-          };
+          throw new NewError(401, "Incorrect new password confirmation");
         }
       } else {
-        throw {
-          code: 400,
-          message: "expired link",
-        };
+        throw new NewError(410, "Expired link");
       }
     } else {
-      throw {
-        code: 400,
-        message: "incorrect reset token",
-      };
+      throw new NewError(403, "Incorrect reset token");
     }
 
     return res.status(200).json({
-      message: "reset password success",
+      message: "Password reset successful",
     });
   } catch (error) {
     next(error);

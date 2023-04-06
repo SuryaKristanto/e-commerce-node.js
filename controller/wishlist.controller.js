@@ -15,13 +15,16 @@ async function queryDB(query, param) {
 
 const addWishlist = async (req, res, next) => {
   try {
-    const bodies = req.body;
+    const { product_code } = req.body;
 
-    const add = await queryDB(`INSERT INTO wishlist (id, user_id, product_code, created_at) VALUES (DEFAULT,?,?,DEFAULT)`, [req.user_id, bodies.product_code]);
-    console.log(add);
+    // insert wishlist rcord
+    const add = await queryDB(`INSERT INTO wishlist (id, user_id, product_code, created_at) VALUES (DEFAULT,?,?,DEFAULT)`, [
+      req.user_id,
+      product_code,
+    ]);
 
     res.status(200).json({
-      message: "added to wishlist",
+      message: "Added to wishlist",
     });
   } catch (error) {
     next(error);
@@ -31,22 +34,19 @@ const addWishlist = async (req, res, next) => {
 const getWishlist = async (req, res, next) => {
   try {
     const product = await queryDB(`SELECT product_code FROM wishlist WHERE user_id = ? ORDER BY created_at DESC`, req.user_id);
-    // console.log(product);
 
     let productCode = [];
     for (let i = 0; i < product.length; i++) {
       productCode[i] = product[i].product_code;
     }
-    // console.log(productCode);
 
     const placeholders = productCode.map(() => "?").join(", ");
-    // console.log(placeholders);
 
+    // select wishlist and product record
     const list = await queryDB(
       `SELECT products.name, products.price FROM wishlist LEFT JOIN products ON wishlist.product_code = products.code WHERE code IN (${placeholders}) AND wishlist.user_id = ? AND deleted_at IS NULL ORDER BY wishlist.created_at DESC`,
       [productCode, req.user_id]
     );
-    console.log(list);
 
     res.status(200).json({
       message: "Wishlist",
@@ -59,13 +59,13 @@ const getWishlist = async (req, res, next) => {
 
 const removeWishlist = async (req, res, next) => {
   try {
-    const bodies = req.body;
+    const { product_code } = req.body;
 
-    const remove = await queryDB(`DELETE FROM wishlist WHERE user_id = ? AND product_code = ?`, [req.user_id, bodies.product_code]);
-    console.log(remove);
+    // delete wishlist record
+    const remove = await queryDB(`DELETE FROM wishlist WHERE user_id = ? AND product_code = ?`, [req.user_id, product_code]);
 
     res.status(200).json({
-      message: "removed from wishlist",
+      message: "Removed from wishlist",
     });
   } catch (error) {
     next(error);

@@ -27,14 +27,19 @@ async function seedDatabase() {
     });
   }
 
+  const roleData = ["admin", "member", "guest"];
+
+  for (let i = 0; i < 3; i++) {
+    const insertQuery = `INSERT INTO roles (id, name, updated_at, created_at) VALUES (DEFAULT,?,DEFAULT,DEFAULT)`;
+    const role = await queryDB(insertQuery, roleData[i]);
+    console.log(role);
+  }
+
   function generateUserData() {
     return {
       role_id: 1,
       email: faker.internet.email().toLowerCase(),
-      password: crypto
-        .createHmac("sha256", "zxcvbnm")
-        .update("admin123")
-        .digest("hex"),
+      password: crypto.createHmac("sha256", "zxcvbnm").update("admin123").digest("hex"),
       name: `${faker.name.firstName()} ${faker.name.lastName()}`,
       address: faker.address.city(),
       phone: faker.phone.number("08##########"),
@@ -67,12 +72,7 @@ async function seedDatabase() {
   for (let i = 0; i < 10; i++) {
     const productData = generateProductData();
     const insertQuery = `INSERT INTO products (code, name, price, weight, qty, updated_at, created_at) VALUES (DEFAULT,?,?,?,?,DEFAULT,DEFAULT)`;
-    const product = await queryDB(insertQuery, [
-      productData.name,
-      productData.price,
-      productData.weight,
-      productData.qty,
-    ]);
+    const product = await queryDB(insertQuery, [productData.name, productData.price, productData.weight, productData.qty]);
     console.log(product);
   }
 
