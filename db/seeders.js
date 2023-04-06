@@ -14,9 +14,12 @@ async function seedDatabase() {
     .then(() => console.log("Successfully connected to mongodb"))
     .catch((err) => console.log(err));
 
-  await Roles.create({ name: "admin" });
-  await Roles.create({ name: "member" });
-  await Roles.create({ name: "guest" });
+  const roleData = ["admin", "member", "guest"];
+
+  for (let i = 0; i < 3; i++) {
+    const role = await Roles.create({ name: roleData[i] });
+    console.log(role);
+  }
 
   function generateUserData() {
     return {
