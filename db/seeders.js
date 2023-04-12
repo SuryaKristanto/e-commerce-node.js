@@ -69,7 +69,7 @@ async function seedDatabase() {
     };
   }
 
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 20; i++) {
     const productData = generateProductData();
     const insertQuery = `INSERT INTO products (code, name, price, weight, qty, updated_at, created_at) VALUES (DEFAULT,?,?,?,?,DEFAULT,DEFAULT)`;
     const product = await queryDB(insertQuery, [productData.name, productData.price, productData.weight, productData.qty]);
