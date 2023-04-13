@@ -4,29 +4,41 @@ const queryDB = require("../helpers/query.helper");
 
 const productList = async (req, res, next) => {
   try {
-    const { page, limit } = req.body;
+    const { page } = req.query;
+    const limit = 10;
 
     // Calculate the offset
     const offset = (page - 1) * limit;
 
-    // find all product record
-    const products = await queryDB(`SELECT name, price FROM products WHERE deleted_at IS NULL LIMIT ? OFFSET ?`, [limit, offset]);
+    let products;
 
-    // check if product exist
-    if (products.length === 0) {
-      throw new NewError(404, "Product not found");
+    const cacheData = await getCache(`products?page${page}`);
+    if (cacheData) {
+      console.log("Cache Hit");
+      products = JSON.parse(cacheData);
+    } else {
+      console.log("Cache Miss");
+      // find all product record
+      products = await queryDB(`SELECT name, price FROM products WHERE deleted_at IS NULL LIMIT ? OFFSET ?`, [limit, offset]);
+
+      // check if product exist
+      if (products.length === 0) {
+        throw new NewError(404, "Product not found");
+      }
+
+      setCache(`products?page${page}`, products);
     }
 
     // count product record
-    const count = await queryDB("SELECT name FROM products WHERE deleted_at IS NULL");
+    const count = await queryDB("SELECT COUNT(code) FROM products WHERE deleted_at IS NULL");
 
     // pagination information
     const pagination = {
-      totalFindings: count.length,
+      totalFindings: count[0]["COUNT(code)"],
       currenPage: page,
-      nextPage: Math.min(Math.ceil(count.length / limit), page + 1),
+      nextPage: Math.min(Math.ceil(count[0]["COUNT(code)"] / limit), page + 1),
       prevPage: Math.max(1, page - 1),
-      totalPage: Math.ceil(count.length / limit),
+      totalPage: Math.ceil(count[0]["COUNT(code)"] / limit),
     };
 
     return res.status(200).json({
@@ -48,6 +60,8 @@ const createProduct = async (req, res, next) => {
       `INSERT INTO products (code, name, price, weight, qty, updated_at, created_at) VALUES (DEFAULT,?,?,?,?,DEFAULT,DEFAULT)`,
       [bodies.name, bodies.price, bodies.weight, bodies.qty]
     );
+
+    removeCacheRegex(`products*`);
 
     return res.status(201).json({
       message: "Success create product",
@@ -75,7 +89,7 @@ const deleteProduct = async (req, res, next) => {
     }
 
     // soft delete
-    const product = await queryDB(`UPDATE products SET deleted_at = NOW() WHERE code = ?`, [code]);
+    const product = await queryDB(`UPDATE products SET deleted_at = NOW() WHERE code = ?`, code);
 
     removeCacheRegex(`product*`);
 
@@ -105,6 +119,8 @@ const updateProduct = async (req, res, next) => {
       [bodies.name, bodies.price, bodies.weight, bodies.qty, req.params.code]
     );
 
+    removeCacheRegex(`product*`);
+
     res.status(200).json({
       message: "Success update product",
     });
@@ -115,12 +131,25 @@ const updateProduct = async (req, res, next) => {
 
 const productDetail = async (req, res, next) => {
   try {
-    // select product record
-    const product = await queryDB(`SELECT name, price, weight, qty FROM products WHERE name = ? AND deleted_at IS NULL`, [req.params.name]);
+    const { name } = req.params;
 
-    // check if product exist
-    if (product.length < 1) {
-      throw new NewError(404, "Product not found");
+    let product;
+
+    const cacheData = await getCache(`product/${name}`);
+    if (cacheData) {
+      console.log("Cache Hit");
+      product = JSON.parse(cacheData);
+    } else {
+      console.log("Cache Miss");
+      // select product record
+      product = await queryDB(`SELECT name, price, weight, qty FROM products WHERE name = ? AND deleted_at IS NULL`, name);
+
+      // check if product exist
+      if (product.length < 1) {
+        throw new NewError(404, "Product not found");
+      }
+
+      setCache(`product/${name}`, product);
     }
 
     return res.status(200).json({
