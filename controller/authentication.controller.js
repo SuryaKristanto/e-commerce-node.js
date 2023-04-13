@@ -168,7 +168,7 @@ const resetPassword = async (req, res, next) => {
     // change token_expired_at date format with moment
     const formatted = moment(user.token_expired_at).format("YYYY-MM-DD HH:mm:ss");
 
-    // check if the eset token match
+    // check if the reset token match
     if (token === user.reset_token) {
       // check if the token not expired yet
       if (formatted > moment().format("YYYY-MM-DD HH:mm:ss")) {
