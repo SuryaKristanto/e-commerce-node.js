@@ -1,18 +1,7 @@
-const connection = require("../db");
+const connection = require("../db/mysql");
+const { getCache, setCache, removeCacheRegex } = require("../helpers/caching.helper");
 const NewError = require("../helpers/error-stack.helper");
-
-async function queryDB(query, param) {
-  return new Promise((resolve) => {
-    connection.query(query, param, function (err, result, fields) {
-      if (err) {
-        //resolve('err : ' + err.stack);
-        resolve("err :" + err.message);
-      } else {
-        resolve(result);
-      }
-    });
-  });
-}
+const queryDB = require("../helpers/query.helper");
 
 const createOrder = async (req, res, next) => {
   try {
@@ -42,10 +31,10 @@ const createOrder = async (req, res, next) => {
         [req.user_id, order_no, payment_method]
       );
 
-      const totalPrice = [];
+      let totalPrice = [];
       await Promise.all(
         existProducts.map(async (product) => {
-          const selectedPayload = products.find((val) => val.code === product.code);
+          const selectedPayload = products.find((val) => parseInt(val.code) === parseInt(product.code));
 
           const deductQty = product.qty - selectedPayload.qty;
 
@@ -63,7 +52,7 @@ const createOrder = async (req, res, next) => {
         })
       );
 
-      const sum = 0;
+      let sum = 0;
       for (let i = 0; i < totalPrice.length; i++) {
         sum += totalPrice[i];
       }
@@ -73,16 +62,17 @@ const createOrder = async (req, res, next) => {
 
       connection.commit();
       console.log("Transaction committed successfully");
+
+      removeCacheRegex("order*");
+
+      return res.status(201).json({
+        message: "Success create order",
+      });
     } catch (error) {
       connection.rollback();
       console.log("Transaction rolled back due to error: " + error);
-    } finally {
-      connection.end();
+      throw new NewError(500, "Transaction rolled back due to error: " + error);
     }
-
-    return res.status(201).json({
-      message: "Success create order",
-    });
   } catch (error) {
     next(error);
   }
@@ -90,42 +80,53 @@ const createOrder = async (req, res, next) => {
 
 const orderList = async (req, res, next) => {
   try {
-    // select user
-    const userId = await queryDB(`SELECT id FROM users WHERE id = ? AND deleted_at IS NULL`, [req.user_id]);
+    let order_products;
 
-    // select order
-    const orders = await queryDB(
-      `SELECT orders.order_no, orders.status, orders.total_price, order_products.product_code AS "product_code", order_products.qty_order AS "qty_order", products.name AS "name", products.price AS "price" FROM orders LEFT JOIN order_products ON orders.id = order_products.order_id LEFT JOIN products ON order_products.product_code = products.code AND (products.deleted_at IS NULL) WHERE orders.deleted_at IS NULL AND orders.user_id = ? AND status <> 'FINISHED' ORDER BY orders.created_at DESC`,
-      userId[0].id
-    );
+    const cacheData = await getCache("orderlist");
+    if (cacheData) {
+      console.log("Cache Hit");
+      order_products = JSON.parse(cacheData);
+    } else {
+      console.log("Cache Miss");
+      // select user
+      const userId = await queryDB(`SELECT id FROM users WHERE id = ? AND deleted_at IS NULL`, req.user_id);
 
-    // loop the data into array
-    const order_products = [];
-    for (let i = 0; i < orders.length; i++) {
-      const existingOrderIndex = order_products.findIndex((order) => order.order_no === orders[i].order_no);
+      // select order
+      const orders = await queryDB(
+        `SELECT orders.order_no, orders.status, orders.total_price, order_products.product_code AS "product_code", order_products.qty_order AS "qty_order", products.name AS "name", products.price AS "price" FROM orders LEFT JOIN order_products ON orders.id = order_products.order_id LEFT JOIN products ON order_products.product_code = products.code AND (products.deleted_at IS NULL) WHERE orders.deleted_at IS NULL AND orders.user_id = ? AND status <> 'FINISHED' ORDER BY orders.created_at DESC`,
+        userId[0].id
+      );
 
-      if (existingOrderIndex > -1) {
-        order_products[existingOrderIndex].products.push({
-          product_code: orders[i].product_code,
-          qty_order: orders[i].qty_order,
-          name: orders[i].name,
-          price: orders[i].price,
-        });
-      } else {
-        order_products.push({
-          order_no: orders[i].order_no,
-          status: orders[i].status,
-          total_price: orders[i].total_price,
-          products: [
-            {
-              product_code: orders[i].product_code,
-              qty_order: orders[i].qty_order,
-              name: orders[i].name,
-              price: orders[i].price,
-            },
-          ],
-        });
+      // loop the data into array
+      order_products = [];
+      for (let i = 0; i < orders.length; i++) {
+        const existingOrderIndex = order_products.findIndex((order) => order.order_no === orders[i].order_no);
+
+        if (existingOrderIndex > -1) {
+          order_products[existingOrderIndex].products.push({
+            product_code: orders[i].product_code,
+            qty_order: orders[i].qty_order,
+            name: orders[i].name,
+            price: orders[i].price,
+          });
+        } else {
+          order_products.push({
+            order_no: orders[i].order_no,
+            status: orders[i].status,
+            total_price: orders[i].total_price,
+            products: [
+              {
+                product_code: orders[i].product_code,
+                qty_order: orders[i].qty_order,
+                name: orders[i].name,
+                price: orders[i].price,
+              },
+            ],
+          });
+        }
       }
+
+      setCache("orderlist", order_products);
     }
 
     res.status(200).json({
@@ -159,42 +160,53 @@ const orderStatus = async (req, res, next) => {
 
 const orderHistory = async (req, res, next) => {
   try {
-    // select user
-    const userId = await queryDB(`SELECT id FROM users WHERE id = ? AND deleted_at IS NULL`, [req.user_id]);
+    let order_products;
 
-    // select order
-    const orders = await queryDB(
-      `SELECT orders.order_no, orders.status, orders.total_price, order_products.product_code AS "product_code", order_products.qty_order AS "qty_order", products.name AS "name", products.price AS "price" FROM orders LEFT JOIN order_products ON orders.id = order_products.order_id LEFT JOIN products ON order_products.product_code = products.code AND (products.deleted_at IS NULL) WHERE orders.deleted_at IS NULL AND orders.user_id = ? AND status = 'FINISHED' ORDER BY orders.created_at DESC`,
-      userId[0].id
-    );
+    const cacheData = await getCache("orderhistory");
+    if (cacheData) {
+      console.log("Cache Hit");
+      order_products = JSON.parse(cacheData);
+    } else {
+      console.log("Cache Miss");
+      // select user
+      const userId = await queryDB(`SELECT id FROM users WHERE id = ? AND deleted_at IS NULL`, req.user_id);
 
-    // loop the data into array
-    const order_products = [];
-    for (let i = 0; i < orders.length; i++) {
-      const existingOrderIndex = order_products.findIndex((order) => order.order_no === orders[i].order_no);
+      // select order
+      const orders = await queryDB(
+        `SELECT orders.order_no, orders.status, orders.total_price, order_products.product_code AS "product_code", order_products.qty_order AS "qty_order", products.name AS "name", products.price AS "price" FROM orders LEFT JOIN order_products ON orders.id = order_products.order_id LEFT JOIN products ON order_products.product_code = products.code AND (products.deleted_at IS NULL) WHERE orders.deleted_at IS NULL AND orders.user_id = ? AND status = 'FINISHED' ORDER BY orders.created_at DESC`,
+        userId[0].id
+      );
 
-      if (existingOrderIndex > -1) {
-        order_products[existingOrderIndex].products.push({
-          product_code: orders[i].product_code,
-          qty_order: orders[i].qty_order,
-          name: orders[i].name,
-          price: orders[i].price,
-        });
-      } else {
-        order_products.push({
-          order_no: orders[i].order_no,
-          status: orders[i].status,
-          total_price: orders[i].total_price,
-          products: [
-            {
-              product_code: orders[i].product_code,
-              qty_order: orders[i].qty_order,
-              name: orders[i].name,
-              price: orders[i].price,
-            },
-          ],
-        });
+      // loop the data into array
+      order_products = [];
+      for (let i = 0; i < orders.length; i++) {
+        const existingOrderIndex = order_products.findIndex((order) => order.order_no === orders[i].order_no);
+
+        if (existingOrderIndex > -1) {
+          order_products[existingOrderIndex].products.push({
+            product_code: orders[i].product_code,
+            qty_order: orders[i].qty_order,
+            name: orders[i].name,
+            price: orders[i].price,
+          });
+        } else {
+          order_products.push({
+            order_no: orders[i].order_no,
+            status: orders[i].status,
+            total_price: orders[i].total_price,
+            products: [
+              {
+                product_code: orders[i].product_code,
+                qty_order: orders[i].qty_order,
+                name: orders[i].name,
+                price: orders[i].price,
+              },
+            ],
+          });
+        }
       }
+
+      setCache("orderhistory", order_products);
     }
 
     res.status(200).json({
