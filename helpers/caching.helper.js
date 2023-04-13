@@ -1,3 +1,4 @@
+require("dotenv").config();
 const Redis = require("ioredis");
 
 let redis;
@@ -45,7 +46,6 @@ function removeCacheRegex(key) {
     keys.forEach(function (key) {
       redis.del(key, function (err, result) {
         if (err) throw err;
-        console.log("Deleted key:", key);
       });
     });
   });

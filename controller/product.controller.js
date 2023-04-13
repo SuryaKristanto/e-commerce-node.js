@@ -1,19 +1,6 @@
-const connection = require("../db");
-const { getCache, setCache, removeCacheRegex } = require("../helpers/caching");
+const { getCache, setCache, removeCacheRegex } = require("../helpers/caching.helper");
 const NewError = require("../helpers/error-stack.helper");
-
-async function queryDB(query, param) {
-  return new Promise((resolve) => {
-    connection.query(query, param, function (err, result, fields) {
-      if (err) {
-        //resolve('err : ' + err.stack);
-        resolve("err :" + err.message);
-      } else {
-        resolve(result);
-      }
-    });
-  });
-}
+const queryDB = require("../helpers/query.helper");
 
 const productList = async (req, res, next) => {
   try {
@@ -95,14 +82,14 @@ const deleteProduct = async (req, res, next) => {
     const { code } = req.params;
 
     // check if product exist
-    const findItem = await queryDB(`SELECT name FROM products WHERE code = ? AND deleted_at IS NULL`, [code]);
+    const findItem = await queryDB(`SELECT name FROM products WHERE code = ? AND deleted_at IS NULL`, code);
 
     if (findItem.length < 1) {
       throw new NewError(404, "Product not found");
     }
 
     // soft delete
-    const product = await queryDB(`UPDATE products SET deleted_at = NOW() WHERE code = ?`, [code]);
+    const product = await queryDB(`UPDATE products SET deleted_at = NOW() WHERE code = ?`, code);
 
     removeCacheRegex(`product*`);
 
@@ -119,7 +106,7 @@ const updateProduct = async (req, res, next) => {
     const bodies = req.body;
 
     // select product code
-    const product = await queryDB(`SELECT code FROM products WHERE code = ? AND deleted_at IS NULL`, [req.params.code]);
+    const product = await queryDB(`SELECT code FROM products WHERE code = ? AND deleted_at IS NULL`, req.params.code);
 
     // check if product exist
     if (product.length < 1) {
@@ -191,7 +178,7 @@ const searchProduct = async (req, res, next) => {
 
     // filter the product
     const filteredProducts = productData.filter((product) => {
-      const nameMatches = product.name.toLowerCase().includes(query.toLowerCase());
+      const nameMatches = product.name.toLowerCase().includes(name.toLowerCase());
       return nameMatches;
     });
 
