@@ -11,24 +11,24 @@ const register = async (req, res, next) => {
   try {
     const bodies = req.body;
 
-    const role = await queryDB(`SELECT * FROM roles WHERE id = ?`, bodies.role_id);
+    const isRoleExist = await queryDB(`SELECT * FROM roles WHERE id = ?`, bodies.role_id);
 
-    const email = await queryDB(`SELECT email FROM  users WHERE email = ?`, bodies.email);
+    const isUserExist = await queryDB(`SELECT email FROM  users WHERE email = ?`, bodies.email);
 
-    const phone = await queryDB(`SELECT phone FROM  users WHERE phone = ?`, bodies.phone);
+    const isPhoneExist = await queryDB(`SELECT phone FROM  users WHERE phone = ?`, bodies.phone);
 
     // check if role_id exist
-    if (role.length < 1) {
+    if (isRoleExist.length < 1) {
       throw new NewError(404, "Role not found");
     }
 
     // check if email already exist
-    if (email.length > 0) {
+    if (isUserExist.length > 0) {
       throw new NewError(409, "Email already exist");
     }
 
     // check if phone already exist
-    if (phone.length > 0) {
+    if (isPhoneExist.length > 0) {
       throw new NewError(409, "Phone already exist");
     }
 
