@@ -1,5 +1,18 @@
+const connection = require("../db");
 const NewError = require("../helpers/error-stack.helper");
-const queryDB = require("../helpers/query.helper");
+
+async function queryDB(query, param) {
+  return new Promise((resolve) => {
+    connection.query(query, param, function (err, result, fields) {
+      if (err) {
+        //resolve('err : ' + err.stack);
+        resolve("err :" + err.message);
+      } else {
+        resolve(result);
+      }
+    });
+  });
+}
 
 const orderPayment = async (req, res, next) => {
   try {
