@@ -88,13 +88,10 @@ const orderList = async (req, res, next) => {
       order_products = JSON.parse(cacheData);
     } else {
       console.log("Cache Miss");
-      // select user
-      const userId = await queryDB(`SELECT id FROM users WHERE id = ? AND deleted_at IS NULL`, req.user_id);
-
       // select order
       const orders = await queryDB(
         `SELECT orders.order_no, orders.status, orders.total_price, order_products.product_code AS "product_code", order_products.qty_order AS "qty_order", products.name AS "name", products.price AS "price" FROM orders LEFT JOIN order_products ON orders.id = order_products.order_id LEFT JOIN products ON order_products.product_code = products.code AND (products.deleted_at IS NULL) WHERE orders.deleted_at IS NULL AND orders.user_id = ? AND status <> 'FINISHED' ORDER BY orders.created_at DESC`,
-        userId[0].id
+        req.user_id
       );
 
       // loop the data into array
@@ -145,7 +142,7 @@ const orderStatus = async (req, res, next) => {
     // find the order status
     const existOrder = await queryDB(`SELECT status FROM orders WHERE id = ? AND deleted_at IS NULL`, id);
 
-    if (existOrder.length < 1) {
+    if (existOrder.length === 0) {
       throw new NewError(404, "Order not found");
     }
 
@@ -168,13 +165,10 @@ const orderHistory = async (req, res, next) => {
       order_products = JSON.parse(cacheData);
     } else {
       console.log("Cache Miss");
-      // select user
-      const userId = await queryDB(`SELECT id FROM users WHERE id = ? AND deleted_at IS NULL`, req.user_id);
-
       // select order
       const orders = await queryDB(
         `SELECT orders.order_no, orders.status, orders.total_price, order_products.product_code AS "product_code", order_products.qty_order AS "qty_order", products.name AS "name", products.price AS "price" FROM orders LEFT JOIN order_products ON orders.id = order_products.order_id LEFT JOIN products ON order_products.product_code = products.code AND (products.deleted_at IS NULL) WHERE orders.deleted_at IS NULL AND orders.user_id = ? AND status = 'FINISHED' ORDER BY orders.created_at DESC`,
-        userId[0].id
+        req.user_id
       );
 
       // loop the data into array

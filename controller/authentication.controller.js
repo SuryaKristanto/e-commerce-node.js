@@ -11,25 +11,23 @@ const register = async (req, res, next) => {
   try {
     const bodies = req.body;
 
-    const role = await queryDB(`SELECT * FROM roles WHERE id = ?`, bodies.role_id);
+    const role = await queryDB(`SELECT id FROM roles WHERE id = ?`, bodies.role_id);
 
-    const email = await queryDB(`SELECT email FROM  users WHERE email = ?`, bodies.email);
-
-    const phone = await queryDB(`SELECT phone FROM  users WHERE phone = ?`, bodies.phone);
+    const existingUser = await queryDB(`SELECT email, phone FROM users WHERE email = ? OR phone = ?`, [bodies.email, bodies.phone]);
 
     // check if role_id exist
-    if (role.length < 1) {
+    if (role.length === 0) {
       throw new NewError(404, "Role not found");
     }
 
-    // check if email already exist
-    if (email.length > 0) {
-      throw new NewError(409, "Email already exist");
-    }
-
-    // check if phone already exist
-    if (phone.length > 0) {
-      throw new NewError(409, "Phone already exist");
+    // check if email or phone already exist
+    if (existingUser.length > 0) {
+      if (existingUser[0].email === bodies.email) {
+        throw new NewError(409, "Email already exist");
+      }
+      if (existingUser[0].phone === bodies.phone) {
+        throw new NewError(409, "Phone already exist");
+      }
     }
 
     // Hash password
@@ -62,7 +60,7 @@ const login = async (req, res, next) => {
     const user = await queryDB(`SELECT id, role_id, email, password FROM users WHERE email = ?`, email);
 
     // if not exist, throw error user not found
-    if (user.length < 1) {
+    if (user.length === 0) {
       throw new NewError(404, "User not found");
     }
 
@@ -111,7 +109,7 @@ const forgotPassword = async (req, res, next) => {
     const isUserExist = await queryDB(`SELECT email FROM  users WHERE email = ?`, email);
 
     // if user email doesn't exist, send error message
-    if (isUserExist.length < 1) {
+    if (isUserExist.length === 0) {
       throw new NewError(404, "Email not found");
     }
 
@@ -160,7 +158,7 @@ const resetPassword = async (req, res, next) => {
     const user = await queryDB(`SELECT password, reset_token, token_expired_at FROM users WHERE email = ?`, email);
 
     // if not exist, throw error
-    if (!user) {
+    if (user.length === 0) {
       throw new NewError(404, "Email not found");
     }
 

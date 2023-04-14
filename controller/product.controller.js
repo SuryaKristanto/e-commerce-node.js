@@ -30,15 +30,15 @@ const productList = async (req, res, next) => {
     }
 
     // count product record
-    const count = await queryDB("SELECT COUNT(code) FROM products WHERE deleted_at IS NULL");
+    const count = await queryDB("SELECT COUNT(code) as count FROM products WHERE deleted_at IS NULL");
 
     // pagination information
     const pagination = {
-      totalFindings: count[0]["COUNT(code)"],
-      currenPage: page,
-      nextPage: Math.min(Math.ceil(count[0]["COUNT(code)"] / limit), page + 1),
-      prevPage: Math.max(1, page - 1),
-      totalPage: Math.ceil(count[0]["COUNT(code)"] / limit),
+      totalFindings: count[0].count,
+      currentPage: page,
+      nextPage: Math.min(Math.ceil(count[0].count / limit), parseInt(page) + 1),
+      previousPage: Math.max(1, page - 1),
+      totalPage: Math.ceil(count[0].count / limit),
     };
 
     return res.status(200).json({
@@ -84,7 +84,7 @@ const deleteProduct = async (req, res, next) => {
     // check if product exist
     const findItem = await queryDB(`SELECT name FROM products WHERE code = ? AND deleted_at IS NULL`, code);
 
-    if (findItem.length < 1) {
+    if (findItem.length === 0) {
       throw new NewError(404, "Product not found");
     }
 
@@ -109,7 +109,7 @@ const updateProduct = async (req, res, next) => {
     const product = await queryDB(`SELECT code FROM products WHERE code = ? AND deleted_at IS NULL`, req.params.code);
 
     // check if product exist
-    if (product.length < 1) {
+    if (product.length === 0) {
       throw new NewError(404, "Product not found");
     }
 
@@ -145,7 +145,7 @@ const productDetail = async (req, res, next) => {
       product = await queryDB(`SELECT name, price, weight, qty FROM products WHERE name = ? AND deleted_at IS NULL`, name);
 
       // check if product exist
-      if (product.length < 1) {
+      if (product.length === 0) {
         throw new NewError(404, "Product not found");
       }
 
